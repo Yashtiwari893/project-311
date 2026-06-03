@@ -1,0 +1,36 @@
+name: LinkedIn Job Runner
+
+on:
+  repository_dispatch:
+    types: [linkedin-job]
+
+jobs:
+  run-linkedin-job:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install playwright @playwright/test
+        
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+
+      - name: Run LinkedIn job
+        env:
+          JOB_ID:         ${{ github.event.client_payload.job_id }}
+          ACTION_TYPE:    ${{ github.event.client_payload.action_type }}
+          LI_AT_COOKIE:   ${{ github.event.client_payload.li_at_cookie }}
+          TARGET_URL:     ${{ github.event.client_payload.target_url }}
+          MESSAGE:        ${{ github.event.client_payload.message }}
+          CAMPAIGN_ID:    ${{ github.event.client_payload.campaign_id }}
+          LEAD_ID:        ${{ github.event.client_payload.lead_id }}
+          WEBHOOK_URL:    ${{ github.event.client_payload.webhook_url }}
+          WEBHOOK_SECRET: ${{ github.event.client_payload.webhook_secret }}
+        run: node scripts/runner.js

@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --c-bg:        #f8fafc;
+  --c-surface:   #ffffff;
+  --c-surface-2: #f1f5f9;
+  --c-surface-3: #e2e8f0;
+  --c-border:    #e2e8f0;
+  --c-text:      #0f172a;
+  --c-text-2:    #64748b;
+  --c-text-3:    #94a3b8;
+  --c-brand:     #4f72ff;
+  --c-brand-2:   #6b8aff;
+  --c-brand-bg:  #eef1ff;
+  --c-success:   #22c55e;
+  --c-success-bg:#dcfce7;
+  --c-warning:   #f59e0b;
+  --c-warning-bg:#fef9c3;
+  --c-danger:    #ef4444;
+  --c-danger-bg: #fee2e2;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-family: 'DM Sans', 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+.animate-slide-up  { animation: slideUp .3s ease both; }
+.animate-fade-in   { animation: fadeIn .2s ease both; }
+.animate-spin      { animation: spin .7s linear infinite; }
+.animate-pulse     { animation: pulse 2s ease infinite; }
+
+/* Scrollbar */
+::-webkit-scrollbar       { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--c-surface-3); border-radius: 9999px; }
+
+/* Table rows */
+tbody tr { transition: background .1s; }
+tbody tr:hover td { background: var(--c-bg); }
