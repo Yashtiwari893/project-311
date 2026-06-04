@@ -208,69 +208,6 @@ export default function ProfileManagerPage() {
     setMessages(prev => [...prev, { role, text, timestamp: new Date() }])
   }, [])
 
-  const handleSend = useCallback(async (val: string) => {
-    if (!val || sending) return
-    setSending(true)
-    setInput('')
-    addMsg('user', val)
-
-    const currentStep = FLOW_STEPS[step]
-    const newData = { ...data, [currentStep.field]: val }
-    setData(newData)
-
-    const nextStep = step + 1
-    setStep(nextStep)
-
-    await new Promise(r => setTimeout(r, 600))
-
-    if (nextStep < FLOW_STEPS.length) {
-      const nextMsg = FLOW_STEPS[nextStep].message(lang, newData)
-      addMsg('ai', nextMsg)
-    } else {
-      // All data collected — generate content
-      addMsg('ai', lang === 'hi'
-        ? '✨ सभी जानकारी मिल गई! अब AI आपके लिए LinkedIn content generate कर रहा है...\n\n⏳ 30-60 seconds लगेंगे — please wait!'
-        : '✨ Got all the info! AI is now generating your personalized LinkedIn content...\n\n⏳ This takes 30-60 seconds — please wait!')
-      setGenerating(true)
-      await generateContent(newData)
-    }
-    setSending(false)
-    inputRef.current?.focus()
-  }, [input, sending, step, data, lang, generateContent, addMsg])
-
-  const startEdit = useCallback((field: string) => {
-    setEditingField(field)
-    setEditValue(generated?.[field] || '')
-  }, [generated])
-
-  const saveEdit = useCallback(() => {
-    if (editingField && generated) {
-      setGenerated({ ...generated, [editingField]: editValue })
-      setEditingField(null)
-      setEditValue('')
-    }
-  }, [editingField, editValue, generated])
-
-  const cancelEdit = useCallback(() => {
-    setEditingField(null)
-    setEditValue('')
-  }, [])
-
-  const handleResume = useCallback(() => {
-    if (resumeDraft) {
-      setData(resumeDraft)
-      setStep(Object.keys(resumeDraft).length)
-      setShowResume(false)
-      setResumeDraft(null)
-    }
-  }, [resumeDraft])
-
-  const handleDiscard = useCallback(() => {
-    setShowResume(false)
-    setResumeDraft(null)
-    localStorage.removeItem('profile_draft')
-  }, [])
-
   const generateContent = useCallback(async (profileData: ProfileData) => {
     try {
       const res = await fetch('/api/profile-manager/generate', {
@@ -348,6 +285,67 @@ export default function ProfileManagerPage() {
       addMsg('ai', lang === 'hi' ? '❌ कुछ error आई। Please refresh करें।' : '❌ Something went wrong. Please refresh.')
     }
   }, [lang, addMsg])
+
+  const handleSend = useCallback(async (val: string) => {
+    if (!val || sending) return
+    setSending(true)
+    addMsg('user', val)
+
+    const currentStep = FLOW_STEPS[step]
+    const newData = { ...data, [currentStep.field]: val }
+    setData(newData)
+
+    const nextStep = step + 1
+    setStep(nextStep)
+
+    await new Promise(r => setTimeout(r, 600))
+
+    if (nextStep < FLOW_STEPS.length) {
+      const nextMsg = FLOW_STEPS[nextStep].message(lang, newData)
+      addMsg('ai', nextMsg)
+    } else {
+      // All data collected — generate content
+      addMsg('ai', lang === 'hi'
+        ? '✨ सभी जानकारी मिल गई! अब AI आपके लिए LinkedIn content generate कर रहा है...\n\n⏳ 30-60 seconds लगेंगे — please wait!'
+        : '✨ Got all the info! AI is now generating your personalized LinkedIn content...\n\n⏳ This takes 30-60 seconds — please wait!')
+      setGenerating(true)
+      await generateContent(newData)
+    }
+    setSending(false)
+  }, [sending, step, data, lang, generateContent, addMsg])
+
+  const startEdit = useCallback((field: string) => {
+    setEditingField(field)
+    setEditValue(generated?.[field] || '')
+  }, [generated])
+
+  const saveEdit = useCallback(() => {
+    if (editingField && generated) {
+      setGenerated({ ...generated, [editingField]: editValue })
+      setEditingField(null)
+      setEditValue('')
+    }
+  }, [editingField, editValue, generated])
+
+  const cancelEdit = useCallback(() => {
+    setEditingField(null)
+    setEditValue('')
+  }, [])
+
+  const handleResume = useCallback(() => {
+    if (resumeDraft) {
+      setData(resumeDraft)
+      setStep(Object.keys(resumeDraft).length)
+      setShowResume(false)
+      setResumeDraft(null)
+    }
+  }, [resumeDraft])
+
+  const handleDiscard = useCallback(() => {
+    setShowResume(false)
+    setResumeDraft(null)
+    localStorage.removeItem('profile_draft')
+  }, [])
 
   const handleApproveAndUpdate = async () => {
     if (!generated || !data.linkedin_url || data.linkedin_url === 'skip') {
@@ -604,13 +602,10 @@ export default function ProfileManagerPage() {
       {/* Input */}
       {step < FLOW_STEPS.length && !generating && (
         <MessageInput
-          input={input}
           placeholder={inputPlaceholder}
           disabled={sending}
           sending={sending}
-          onChange={handleInputChange}
           onSend={handleSend}
-          inputRef={inputRef}
         />
       )}
 
