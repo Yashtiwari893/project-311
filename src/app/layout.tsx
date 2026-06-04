@@ -15,6 +15,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <head>
         <script src="https://checkout.razorpay.com/v1/checkout.js" async />
+        <link rel="icon" href="/favicon.svg" />
       </head>
       <body className={inter.className}>{children}</body>
     </html>
