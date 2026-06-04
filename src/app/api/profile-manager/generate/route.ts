@@ -19,6 +19,10 @@ const GOAL_MAP: Record<string, string> = {
   '4': 'Expand professional network for business growth',
 }
 
+function sanitize(str: string): string {
+  return str.replace(/[<>{}]/g, '').substring(0, 500)
+}
+
 export async function POST(req: NextRequest) {
   try {
     const supabase = createServerSupabaseClient()
@@ -27,8 +31,38 @@ export async function POST(req: NextRequest) {
 
     const { profile, lang } = await req.json()
 
-    const tone = TONE_MAP[profile.tone] || TONE_MAP['1']
-    const goal = GOAL_MAP[profile.goal] || GOAL_MAP['1']
+    const { data: lastGen } = await supabase
+      .from('profile_generations')
+      .select('created_at')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
+
+    if (lastGen?.created_at) {
+      const minutesSince = (Date.now() - new Date(lastGen.created_at).getTime()) / 60000
+      if (minutesSince < 5) {
+        return NextResponse.json(
+          { error: 'Please wait 5 minutes between profile generations' },
+          { status: 429 }
+        )
+      }
+    }
+
+    const safeProfile = {
+      name: sanitize(profile.name || ''),
+      current_role: sanitize(profile.current_role || ''),
+      experience: sanitize(profile.experience || ''),
+      skills: sanitize(profile.skills || ''),
+      achievements: sanitize(profile.achievements || ''),
+      goal: sanitize(profile.goal || ''),
+      tone: sanitize(profile.tone || ''),
+      post_topics: sanitize(profile.post_topics || ''),
+      linkedin_url: sanitize(profile.linkedin_url || ''),
+    }
+
+    const tone = TONE_MAP[safeProfile.tone] || TONE_MAP['1']
+    const goal = GOAL_MAP[safeProfile.goal] || GOAL_MAP['1']
     const isHindi = lang === 'hi'
 
     const systemPrompt = `You are an expert LinkedIn profile writer specializing in Indian professionals.
@@ -51,14 +85,14 @@ CRITICAL: Return ONLY valid JSON with these exact keys. No markdown, no explanat
 
     const userPrompt = `Create a complete LinkedIn profile makeover for this professional:
 
-Name: ${profile.name}
-Current Role: ${profile.current_role}
-Experience: ${profile.experience}
-Skills mentioned: ${profile.skills}
-Achievements: ${profile.achievements}
+Name: ${safeProfile.name}
+Current Role: ${safeProfile.current_role}
+Experience: ${safeProfile.experience}
+Skills mentioned: ${safeProfile.skills}
+Achievements: ${safeProfile.achievements}
 Goal on LinkedIn: ${goal}
 Preferred tone: ${tone}
-Post topics interest: ${profile.post_topics}
+Post topics interest: ${safeProfile.post_topics}
 
 Generate:
 1. HEADLINE (max 220 chars): Punchy, keyword-rich, captures value proposition
@@ -74,7 +108,8 @@ Generate:
 Make it sound authentic and human — NOT generic AI content. Include specific details from their background.
 For Indian context: mention relevant Indian companies, IIT/NIT/MBA mentions if applicable, Indian market insights in posts.`
 
-    const completion = await groq.chat.completions.create({
+    // Use streaming to get real-time feedback
+    const stream = await groq.chat.completions.create({
       model: 'llama3-70b-8192',
       messages: [
         { role: 'system', content: systemPrompt },
@@ -82,30 +117,72 @@ For Indian context: mention relevant Indian companies, IIT/NIT/MBA mentions if a
       ],
       temperature: 0.8,
       max_tokens: 4096,
+      stream: true,
     })
 
-    const raw = completion.choices[0]?.message?.content || '{}'
-    
-    // Clean JSON (remove markdown if any)
-    const cleaned = raw.replace(/```json\n?|\n?```/g, '').trim()
-    let content: Record<string, string>
-    try {
-      content = JSON.parse(cleaned)
-    } catch {
-      // Attempt to extract JSON from response
-      const match = cleaned.match(/\{[\s\S]*\}/)
-      content = match ? JSON.parse(match[0]) : { headline: 'Error generating content', about: raw }
-    }
+    // Stream response back to client with real-time token feedback
+    const encoder = new TextEncoder()
+    const readable = new ReadableStream({
+      async start(controller) {
+        try {
+          let raw = ''
+          let isStreaming = true
+          
+          // Send initial start message
+          controller.enqueue(encoder.encode(JSON.stringify({ type: 'start', section: 'about' }) + '\n'))
+          
+          // Stream tokens from Groq in real-time
+          for await (const chunk of stream) {
+            const token = chunk.choices[0]?.delta?.content || ''
+            raw += token
+            
+            if (token) {
+              // Send each token for visual streaming effect
+              controller.enqueue(encoder.encode(JSON.stringify({ 
+                type: 'token',
+                content: token 
+              }) + '\n'))
+            }
+          }
+          
+          // Parse complete response to extract all fields
+          const cleaned = raw.replace(/```json\n?|\n?```/g, '').trim()
+          let content: Record<string, string>
+          try {
+            content = JSON.parse(cleaned)
+          } catch {
+            const match = cleaned.match(/\{[\s\S]*\}/)
+            content = match ? JSON.parse(match[0]) : { headline: 'Error generating content', about: raw }
+          }
+          
+          // Save generated content to Supabase
+          await supabase.from('profile_generations').insert({
+            user_id:  user.id,
+            profile_data: safeProfile,
+            generated_content: content,
+            lang,
+          }).then(() => {}) // ignore if table doesn't exist yet
+          
+          // Send complete message with all content
+          controller.enqueue(encoder.encode(JSON.stringify({ 
+            type: 'complete',
+            content 
+          }) + '\n'))
+          
+          controller.close()
+        } catch (e) {
+          controller.error(e)
+        }
+      }
+    })
 
-    // Save generated content to Supabase
-    await supabase.from('profile_generations').insert({
-      user_id:  user.id,
-      profile_data: profile,
-      generated_content: content,
-      lang,
-    }).then(() => {}) // ignore if table doesn't exist yet
-
-    return NextResponse.json({ content })
+    return new NextResponse(readable, {
+      headers: {
+        'Content-Type': 'application/x-ndjson',
+        'Transfer-Encoding': 'chunked',
+        'Cache-Control': 'no-cache',
+      },
+    })
   } catch (e: unknown) {
     console.error('Generation error:', e)
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })

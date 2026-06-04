@@ -6,6 +6,7 @@ export type CampaignMode = 'outbound' | 'inbound'
 export type OutreachType = 'connect' | 'inmail' | 'message'
 export type LeadStatus = 'pending' | 'connected' | 'message_sent' | 'replied' | 'accepted' | 'ignored' | 'failed'
 export type JobStatus = 'queued' | 'running' | 'done' | 'failed'
+export type JobActionType = 'connect' | 'send_message' | 'inmail' | 'scrape_leads' | 'profile_update'
 export type SubStatus = 'created' | 'authenticated' | 'active' | 'paused' | 'halted' | 'cancelled' | 'completed' | 'expired'
 
 export interface Profile {

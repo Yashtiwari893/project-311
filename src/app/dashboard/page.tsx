@@ -56,10 +56,11 @@ export default function DashboardPage() {
       setUser({ name: profile?.name, plan: profile?.plan })
       setLang(profile?.language || 'en')
 
-      const [campaigns, leads, analytics] = await Promise.all([
+      const [campaigns, leads, analytics, recent] = await Promise.all([
         supabase.from('campaigns').select('id,status').eq('user_id', u.id),
         supabase.from('leads').select('status').eq('user_id', u.id),
         supabase.from('analytics_daily').select('*').eq('user_id', u.id).order('date', { ascending: false }).limit(7),
+        supabase.from('campaigns').select('*').eq('user_id', u.id).order('updated_at', { ascending: false }).limit(5),
       ])
 
       const cData = campaigns.data || []
@@ -74,9 +75,7 @@ export default function DashboardPage() {
         accepted:    lData.filter(l => ['connected','replied','accepted'].includes(l.status)).length,
       })
       setAnalytics(aData)
-
-      const { data: rc } = await supabase.from('campaigns').select('*').eq('user_id', u.id).order('updated_at', { ascending: false }).limit(5)
-      setRecent(rc || [])
+      setRecent(recent.data || [])
       setLoading(false)
     }
     load()

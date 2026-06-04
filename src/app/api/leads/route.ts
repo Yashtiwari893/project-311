@@ -16,11 +16,12 @@ export async function GET(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { searchParams } = new URL(req.url)
-    const campaign_id = searchParams.get('campaign_id')
-    const status      = searchParams.get('status')
-    const search      = searchParams.get('search')
-    const page        = parseInt(searchParams.get('page') || '1')
-    const limit       = parseInt(searchParams.get('limit') || '20')
+    const campaign_id   = searchParams.get('campaign_id')
+    const status        = searchParams.get('status')
+    const search        = searchParams.get('search')
+    const page          = parseInt(searchParams.get('page') || '1')
+    const limit         = parseInt(searchParams.get('limit') || '20')
+    const includeStats  = searchParams.get('includeStats') === 'true'
 
     let query = supabase
       .from('leads')
@@ -36,42 +37,18 @@ export async function GET(req: NextRequest) {
     const { data, error, count } = await query
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-    // Pipeline stats
+    // Pipeline stats (only if explicitly requested to avoid N+1)
     let stats: unknown = null
-    try {
-      const result = await supabase.rpc('get_lead_stats', { p_user_id: user.id }).single()
-      stats = result.data
-    } catch {
-      stats = null
+    if (includeStats) {
+      try {
+        const result = await supabase.rpc('get_lead_stats', { p_user_id: user.id }).single()
+        stats = result.data
+      } catch {
+        stats = null
+      }
     }
 
-    return NextResponse.json({ data, total: count, page, limit, stats })
-  } catch (e: unknown) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 500 })
-  }
-}
-
-// PATCH /api/leads/:id — update lead status/notes
-export async function PATCH(req: NextRequest) {
-  try {
-    const supabase = createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-    const { id, ...body } = await req.json()
-    const parsed = UpdateLeadSchema.safeParse(body)
-    if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
-
-    const { data, error } = await supabase
-      .from('leads')
-      .update(parsed.data)
-      .eq('id', id)
-      .eq('user_id', user.id)
-      .select()
-      .single()
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json({ data })
+    return NextResponse.json({ data, total: count, page, limit, ...(includeStats && { stats }) })
   } catch (e: unknown) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })
   }

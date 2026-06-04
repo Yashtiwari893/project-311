@@ -2,10 +2,6 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 
-declare global {
-  interface Window { Razorpay: new (opts: Record<string, unknown>) => { open(): void } }
-}
-
 const PLANS = [
   {
     key:     'free' as const,

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import crypto from 'crypto'
 import { createAdminClient } from '@/lib/supabase.server'
 import { verifyWebhookSignature } from '@/lib/razorpay'
 import { sendPaymentSuccessEmail } from '@/lib/email'
@@ -6,14 +7,27 @@ import { sendPaymentSuccessEmail } from '@/lib/email'
 export async function POST(req: NextRequest) {
   try {
     const body = await req.text()
-    const signature = req.headers.get('x-razorpay-signature') || ''
-
-    // Verify signature
-    if (!verifyWebhookSignature(body, signature)) {
-      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
-    }
+    const razorpaySignature = req.headers.get('x-razorpay-signature')
+    const githubSignature = req.headers.get('x-hub-signature-256')
+    const signature = razorpaySignature || githubSignature || ''
 
     const event = JSON.parse(body)
+
+    if (event.event === 'job.completed') {
+      const secret = process.env.WEBHOOK_SECRET
+      if (!secret) {
+        return NextResponse.json({ error: 'Missing webhook secret' }, { status: 500 })
+      }
+      const sig = crypto.createHmac('sha256', secret).update(body).digest('hex')
+      if (sig !== signature) {
+        return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
+      }
+    } else {
+      if (!verifyWebhookSignature(body, signature)) {
+        return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
+      }
+    }
+
     const supabase = createAdminClient()
 
     switch (event.event) {

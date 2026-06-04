@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase.server'
 import { triggerLinkedInJob } from '@/lib/github'
+import { decrypt } from '@/lib/crypto'
 import { z } from 'zod'
 
 const UpdateSchema = z.object({
@@ -57,7 +58,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         await triggerLinkedInJob({
           job_id:         crypto.randomUUID(),
           action_type:    'scrape_leads',
-          li_at_cookie:   account.li_at_cookie,
+          li_at_cookie:   decrypt(account.li_at_cookie),
           campaign_id:    params.id,
           webhook_url:    `${process.env.NEXT_PUBLIC_APP_URL}/api/webhook`,
           webhook_secret: process.env.WEBHOOK_SECRET!,

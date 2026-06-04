@@ -1,10 +1,12 @@
+import type { JobActionType } from '@/types'
+
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN!
 const GITHUB_OWNER = process.env.GITHUB_OWNER!
 const GITHUB_REPO  = process.env.GITHUB_REPO!
 
 interface JobPayload {
   job_id: string
-  action_type: 'connect' | 'send_message' | 'inmail' | 'scrape_leads'
+  action_type: JobActionType
   li_at_cookie: string
   target_url?: string
   message?: string

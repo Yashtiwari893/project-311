@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase.server'
+import { encrypt } from '@/lib/crypto'
 import { z } from 'zod'
 
 const AddAccountSchema = z.object({
@@ -51,7 +52,7 @@ export async function POST(req: NextRequest) {
 
     const { data, error } = await supabase
       .from('linkedin_accounts')
-      .insert({ ...parsed.data, user_id: user.id })
+      .insert({ ...parsed.data, user_id: user.id, li_at_cookie: encrypt(parsed.data.li_at_cookie) })
       .select('id,name,email,profile_url,status,daily_limit')
       .single()
 

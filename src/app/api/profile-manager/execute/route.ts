@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase.server'
 import { triggerLinkedInJob } from '@/lib/github'
 import { sendCampaignDoneEmail } from '@/lib/email'
+import { decrypt } from '@/lib/crypto'
 
 export async function POST(req: NextRequest) {
   try {
@@ -25,10 +26,25 @@ export async function POST(req: NextRequest) {
       }, { status: 400 })
     }
 
-    // Create job record
+    // Save generated profile update data and use it as the campaign reference
+    const { data: generation, error: generationError } = await supabase
+      .from('profile_generations')
+      .insert({
+        user_id: user.id,
+        profile_data: profile,
+        generated_content: generated,
+        lang: 'en',
+      })
+      .select('id')
+      .single()
+
+    if (generationError || !generation?.id) {
+      return NextResponse.json({ error: 'Failed to save profile generation data' }, { status: 500 })
+    }
+
     const { data: job } = await supabase.from('jobs').insert({
       user_id:     user.id,
-      campaign_id: '00000000-0000-0000-0000-000000000000', // placeholder for profile update
+      campaign_id: generation.id,
       action_type: 'profile_update',
       payload: {
         headline: generated.headline,
@@ -43,9 +59,9 @@ export async function POST(req: NextRequest) {
     // Trigger GitHub Actions
     await triggerLinkedInJob({
       job_id:         job?.id || crypto.randomUUID(),
-      action_type:    'profile_update' as 'connect', // extended type
-      li_at_cookie:   account.li_at_cookie,
-      campaign_id:    'profile-manager',
+      action_type:    'profile_update',
+      li_at_cookie:   decrypt(account.li_at_cookie),
+      campaign_id:    generation.id,
       webhook_url:    `${process.env.NEXT_PUBLIC_APP_URL}/api/webhook`,
       webhook_secret: process.env.WEBHOOK_SECRET!,
       message:        JSON.stringify({
